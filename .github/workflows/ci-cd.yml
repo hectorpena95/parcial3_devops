@@ -71,23 +71,13 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          # Inyectamos el usuario de Docker como variable de entorno nativa para el script SSH
           envs: DOCKER_USERNAME
+          script: |
+            cd ~/monitoring
+            sudo docker pull $DOCKER_USERNAME/ticket:latest
+            export DOCKER_USERNAME=$DOCKER_USERNAME
+            sudo -E docker-compose down
+            sudo -E docker-compose up -d
+            sudo docker image prune -f
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        script: |
-          # Entrar a la carpeta donde está configurado el entorno
-          cd ~/monitoring
-          
-          # Descargar la última versión de la imagen usando la variable inyectada
-          sudo docker pull $DOCKER_USERNAME/ticket:latest
-          
-          # Pasar la variable al entorno de docker-compose para que sepa qué descargar
-          export DOCKER_USERNAME=$DOCKER_USERNAME
-          
-          # Reiniciar los servicios aplicando los cambios de forma limpia
-          sudo -E docker-compose down
-          sudo -E docker-compose up -d
-          
-          # Limpiar imágenes viejas o colgadas para no llenar el disco de la EC2
-          sudo docker image prune -f
