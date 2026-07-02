@@ -66,7 +66,8 @@ jobs:
 
       - name: Gate de seguridad Snyk (bloqueante IE6)
         run: |
-          snyk test --severity-threshold=high
+          snyk auth ${{ secrets.SNYK_TOKEN }}
+          snyk test --severity-threshold=high --all-projects
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
