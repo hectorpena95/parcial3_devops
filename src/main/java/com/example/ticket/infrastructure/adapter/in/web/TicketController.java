@@ -74,4 +74,12 @@ public class TicketController {
         EstadoTicket estado = consultarEstadoTicketDbUseCase.consultarEstado(id);
         return ResponseEntity.ok(estado.name());
     }
+
+    @Value("${app.version:unknown}")
+    private String appVersion;
+    
+    @GetMapping("/version")
+    public String version() {
+        return "Ticket Service - Commit: " + appVersion;
+    }
 }
