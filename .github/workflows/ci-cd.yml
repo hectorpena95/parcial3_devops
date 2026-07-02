@@ -56,29 +56,19 @@ jobs:
       - name: Compilar proyecto
         run: mvn clean package -DskipTests -q
 
-      - name: Exportar reporte Snyk (evidencia, no bloqueante)
-        run: |
-          npm install -g snyk
-          snyk auth ${{ secrets.SNYK_TOKEN }}
-          snyk test --json > snyk-report.json || true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
       - name: Gate de seguridad Snyk (bloqueante IE6)
-        run: |
-          npm install -g snyk
-          snyk auth ${{ secrets.SNYK_TOKEN }}
-          mvn dependency:resolve -q
-          snyk test --severity-threshold=high
+        uses: snyk/actions/maven@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
 
       - name: Subir reporte Snyk como artefacto
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: snyk-report
-          path: snyk-report.json
+          path: snyk.sarif
 
   # ==========================================
   # ETAPA 3: BUILD & PUSH DOCKER IMAGE
