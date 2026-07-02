@@ -37,7 +37,7 @@ jobs:
             -Dsonar.qualitygate.timeout=300
 
   # ==========================================
-  # ETAPA 2: SEGURIDAD CON SNYK (IE5/IE6)
+  # ETAPA 2: SEGURIDAD CON SNYK (IE5/IE6) 
   # ==========================================
 security-snyk:
     needs: build-and-test
