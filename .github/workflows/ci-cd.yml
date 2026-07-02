@@ -98,37 +98,22 @@ jobs:
   # ==========================================
   # ETAPA 4: DEPLOY CONTINUO A AWS EC2 VIA SSH
   # ==========================================
-  deploy-ec2:
+ deploy-ec2:
     needs: build-docker
     runs-on: ubuntu-latest
     steps:
-      - name: Ejecutar Despliegue en AWS EC2 via SSH (IE2)
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          timeout: 60s
-          command_timeout: 10m
-          envs: DOCKER_USERNAME
-          script: |
-            START_TIME=$(date +%s)
-            cd ~/monitoring
-            sudo docker pull $DOCKER_USERNAME/ticket:latest
-            sudo DOCKER_USERNAME=$DOCKER_USERNAME docker compose down
-            sudo DOCKER_USERNAME=$DOCKER_USERNAME docker compose up -d
-            sudo docker image prune -f
-            sleep 20
-            curl -s http://localhost:8081/actuator/health && echo "Deploy exitoso" || echo "App iniciando"
-            END_TIME=$(date +%s)
-            DURATION=$((END_TIME - START_TIME))
-            echo "Tiempo de despliegue: ${DURATION}s"
-            aws cloudwatch put-metric-data \
-              --namespace TicketService/CICD \
-              --metric-name DeploymentDuration \
-              --value $DURATION \
-              --unit Seconds \
-              --region us-east-1 || true
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Deploy via SSM (IE2)
+        run: |
+          aws ssm send-command \
+            --instance-id "i-0eba01271e0f059d4" \
+            --document-name "AWS-RunShellScript" \
+            --parameters commands='["cd /home/ec2-user/monitoring && sudo docker pull ${{ secrets.DOCKER_USERNAME }}/ticket:latest && sudo DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }} docker compose down && sudo DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }} docker compose up -d && sudo docker image prune -f"]' \
+            --region us-east-1
