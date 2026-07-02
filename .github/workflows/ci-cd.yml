@@ -109,26 +109,18 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
+          timeout: 60s
+          command_timeout: 10m
           envs: DOCKER_USERNAME
           script: |
             START_TIME=$(date +%s)
             cd ~/monitoring
-
-            # Descargar la nueva imagen
             sudo docker pull $DOCKER_USERNAME/ticket:latest
-
-            # Detener y levantar
             sudo DOCKER_USERNAME=$DOCKER_USERNAME docker compose down
             sudo DOCKER_USERNAME=$DOCKER_USERNAME docker compose up -d
-
-            # Limpieza
             sudo docker image prune -f
-
-            # Esperar que levante y verificar health
             sleep 20
             curl -s http://localhost:8081/actuator/health && echo "Deploy exitoso" || echo "App iniciando"
-
-            # Medir y publicar tiempo de despliegue a CloudWatch (IE3)
             END_TIME=$(date +%s)
             DURATION=$((END_TIME - START_TIME))
             echo "Tiempo de despliegue: ${DURATION}s"
