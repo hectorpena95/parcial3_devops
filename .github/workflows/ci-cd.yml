@@ -39,7 +39,7 @@ jobs:
   # ==========================================
   # ETAPA 2: SEGURIDAD CON SNYK (IE5/IE6)
   # ==========================================
-  security-snyk:
+security-snyk:
     needs: build-and-test
     runs-on: ubuntu-latest
     steps:
@@ -57,18 +57,20 @@ jobs:
         run: mvn clean package -DskipTests -q
 
       - name: Gate de seguridad Snyk (bloqueante IE6)
-        uses: snyk/actions/maven@master
+        run: |
+          npm install -g snyk
+          snyk auth ${{ secrets.SNYK_TOKEN }}
+          snyk test --file=pom.xml --package-manager=maven --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high
+          JAVA_HOME: ${{ env.JAVA_HOME }}
 
       - name: Subir reporte Snyk como artefacto
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: snyk-report
-          path: snyk.sarif
+          path: snyk-report.json
 
   # ==========================================
   # ETAPA 3: BUILD & PUSH DOCKER IMAGE
