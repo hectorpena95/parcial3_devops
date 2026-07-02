@@ -3,7 +3,7 @@ name: CI/CD Pipeline - Parcial 3 DevOps
 on:
   push:
     branches:
-      - main # Se ejecuta automáticamente al hacer push a main
+      - main
 
 jobs:
   # ==========================================
@@ -15,7 +15,7 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
 
       - name: Configurar Java 17
         uses: actions/setup-java@v4
@@ -27,17 +27,61 @@ jobs:
       - name: Ejecutar Tests y Generar Reporte JaCoCo (IE4)
         run: mvn clean test
 
-      - name: Analizar Calidad con SonarCloud (IE4)
+      - name: Analizar Calidad con SonarCloud + Quality Gate (IE5/IE6)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: mvn sonar:sonar
+        run: |
+          mvn sonar:sonar \
+            -Dsonar.qualitygate.wait=true \
+            -Dsonar.qualitygate.timeout=300
 
   # ==========================================
-  # ETAPA 2: BUILD & PUSH DOCKER IMAGE
+  # ETAPA 2: SEGURIDAD CON SNYK (IE5/IE6)
+  # ==========================================
+  security-snyk:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Compilar proyecto
+        run: mvn clean package -DskipTests -q
+
+      - name: Exportar reporte Snyk (evidencia, no bloqueante)
+        run: |
+          npm install -g snyk
+          snyk auth ${{ secrets.SNYK_TOKEN }}
+          snyk test --json > snyk-report.json || true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Gate de seguridad Snyk (bloqueante IE6)
+        run: |
+          snyk test --severity-threshold=high
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Subir reporte Snyk como artefacto
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: snyk-report
+          path: snyk-report.json
+
+  # ==========================================
+  # ETAPA 3: BUILD & PUSH DOCKER IMAGE
   # ==========================================
   build-docker:
-    needs: build-and-test 
+    needs: [build-and-test, security-snyk]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout del código
@@ -57,11 +101,11 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/ticket:latest
 
-# ==========================================
-  # ETAPA 3: DEPLOY CONTINUO A AWS EC2 VIA SSH
+  # ==========================================
+  # ETAPA 4: DEPLOY CONTINUO A AWS EC2 VIA SSH
   # ==========================================
   deploy-ec2:
-    needs: build-docker 
+    needs: build-docker
     runs-on: ubuntu-latest
     steps:
       - name: Ejecutar Despliegue en AWS EC2 via SSH (IE2)
@@ -73,16 +117,32 @@ jobs:
           port: 22
           envs: DOCKER_USERNAME
           script: |
+            START_TIME=$(date +%s)
             cd ~/monitoring
-            
+
             # Descargar la nueva imagen
             sudo docker pull $DOCKER_USERNAME/ticket:latest
-            
-            # Detener y levantar usando el comando moderno de Docker V2
+
+            # Detener y levantar
             sudo DOCKER_USERNAME=$DOCKER_USERNAME docker compose down
             sudo DOCKER_USERNAME=$DOCKER_USERNAME docker compose up -d
-            
+
             # Limpieza
             sudo docker image prune -f
+
+            # Esperar que levante y verificar health
+            sleep 20
+            curl -s http://localhost:8081/actuator/health && echo "Deploy exitoso" || echo "App iniciando"
+
+            # Medir y publicar tiempo de despliegue a CloudWatch (IE3)
+            END_TIME=$(date +%s)
+            DURATION=$((END_TIME - START_TIME))
+            echo "Tiempo de despliegue: ${DURATION}s"
+            aws cloudwatch put-metric-data \
+              --namespace TicketService/CICD \
+              --metric-name DeploymentDuration \
+              --value $DURATION \
+              --unit Seconds \
+              --region us-east-1 || true
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
