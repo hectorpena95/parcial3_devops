@@ -9,7 +9,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-1234}
       MYSQL_DATABASE: ticketdb
     ports:
-      - "3306:3306" # Cambiado a 3306 para que calce directo con la URL de Spring
+      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -19,12 +19,11 @@ services:
       retries: 5
 
   ticket:
-    image: ${DOCKER_USERNAME:-tu-usuario-docker}/ticket:latest # Modificado para producción/pipeline
+    image: ${DOCKER_USERNAME:-dxminique}/ticket:latest
     container_name: ticket-service
     restart: unless-stopped
     depends_on:
-      mysql:
-        condition: service_healthy
+      - mysql
     ports:
       - "8081:8081"
     environment:
@@ -38,24 +37,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    restart: unless-stopped
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
 
 volumes:
   mysql_data:
